@@ -1,65 +1,65 @@
 # A Comparative Study of Deep Learning Models for Sign Language Sentence Recognition
 
-## 1. Project Overview and Objectives
+## 1\. Project Overview
 
-This project undertakes a systematic evaluation of different deep learning architectures for the complex task of sign language sentence recognition. The primary objective is to investigate the performance progression from a simple baseline model to a more sophisticated, hyperparameter-optimized model, while detailing the critical data engineering and training strategy decisions made along the way.
+This project presents a systematic evaluation of deep learning architectures for sign language sentence recognition using the large-scale **[How2Sign](https://how2sign.github.io/)** dataset. The primary objective is to investigate and quantify the performance progression from a simple keypoint-based baseline to a sophisticated, hyperparameter-optimized video-based model. All experiments focus exclusively on **frontal-view RGB video clips**.
 
-All experiments are conducted using the large-scale **[How2Sign](https://how2sign.github.io/)** dataset, with a specific focus on **frontal-view RGB video clips**.
+\<hr\>
 
-## 2. Methodology and Models
+## 2\. Methodology
 
-The core of this investigation lies in an iterative, three-phase approach to model development, featuring a two-stage training strategy for the advanced models.
+The investigation follows an iterative, three-phase approach to model development, featuring a two-stage training strategy for the advanced video-based models.
 
 ### Phase 1: Baseline Model (Keypoint-based LSTM)
-To establish a performance baseline, an initial model was developed using pre-processed 2D pose estimation keypoints. This approach tests the efficacy of using abstract geometric data.
-* **Architecture**: A stacked LSTM network consisting of `LSTM(64) -> Dropout(0.5) -> LSTM(64) -> Dropout(0.5) -> Dense(32)`.
+
+A baseline was established using pre-processed 2D pose estimation keypoints to test the efficacy of abstract geometric data.
+
+  * **Architecture**: A stacked LSTM network: `LSTM(64) -> Dropout(0.5) -> LSTM(64) -> Dropout(0.5) -> Dense(32)`.
 
 ### Phase 2: Advanced Model (CNN-LSTM)
-To leverage richer visual information, an advanced model was built to process raw video frames directly. This model combines a Convolutional Neural Network (CNN) for spatial feature extraction and a Long Short-Term Memory (LSTM) network for temporal modeling.
-* **CNN Base**: A pre-trained **MobileNetV2** is used as the feature extractor.
-* **Two-Stage Training Strategy**:
-    1.  **Feature Extraction Training**: Initially, the loaded MobileNetV2 base model has all of its layers **frozen** (`trainable = False`). In this stage, only the weights of the newly added LSTM and Dense classification layers are trained. This allows the temporal part of the model to learn how to interpret the powerful, general-purpose features from the CNN without destabilizing the pre-trained weights.
-    2.  **Fine-Tuning**: After the model achieves stability (e.g., after 20-30 epochs), the top layers of the MobileNetV2 base are **unfrozen** (made trainable). The entire model is then trained for a few more epochs with a very low learning rate. This allows the pre-trained CNN to slightly adapt its feature extraction to the specific nuances of sign language video data.
-* **Manually-Tuned Hyperparameters**: For this phase, the manually-set hyperparameters were `LSTM(128)` and `Dropout(0.5)`.
 
-### Phase 3: Hyperparameter Optimization (Bayesian Optimization)
-To systematically find a more optimal configuration for the CNN-LSTM architecture's initial training stage, Bayesian Optimization was performed using the **Optuna** framework. The search space was defined as follows:
-* **`learning_rate`**: A log-uniform distribution between `1e-5` and `1e-3`.
-* **`lstm_units`**: An integer value between `64` and `256`.
-* **`dropout_rate`**: A uniform distribution between `0.2` and `0.5`.
+To leverage richer visual information, an advanced model was built to process raw video frames. This architecture combines a CNN for spatial feature extraction with an LSTM for temporal modeling.
 
-## 3. Key Data Processing and Feature Engineering Decisions
+  * **CNN Base**: A pre-trained **MobileNetV2** with frozen weights.
+  * **Training Strategy**: A two-stage process was employed:
+    1.  **Feature Extraction Training**: Initially, only the LSTM and Dense classification layers were trained. This allows the new layers to learn how to interpret the powerful, general-purpose features from the frozen CNN base.
+    2.  **Fine-Tuning**: After initial stable training, the top layers of the MobileNetV2 base were unfrozen and the entire model was trained for a few more epochs with a very low learning rate, allowing the feature extractor to adapt to the specifics of sign language data.
+  * **Manual Hyperparameters**: This phase used a manually-tuned configuration of `LSTM(128)` and `Dropout(0.5)`.
 
-Several critical decisions were made during data preprocessing to ensure model compatibility and computational efficiency.
+### Phase 3: Bayesian Hyperparameter Optimization
 
-### 3.1. Sequence Standardization (Fixed Frame Count)
-* **Selection**: All video clips were standardized to a fixed length of **`MAX_FRAMES = 30`**.
-* **Rationale**: Recurrent Neural Networks like LSTMs require fixed-length input sequences for efficient batch processing. A length of 30 was chosen as a balance to capture the motion of most signs without excessive computational overhead.
-* **Calculation**: Videos with **more than 30 frames** were **truncated**. Videos with **fewer than 30 frames** were **padded** with zero-value vectors (black frames).
+To systematically discover an optimal configuration for the CNN-LSTM, Bayesian Optimization was performed using the **Optuna** framework. The search space was defined as:
 
-### 3.2. Frame Resolution (Image Downsampling)
-* **Selection**: Each video frame was resized to a resolution of **`IMG_SIZE = 64x64`** pixels.
-* **Rationale**: Downsampling from the original high resolution significantly reduces the computational load on the CNN, making training feasible while retaining sufficient visual detail.
-* **Calculation**: This was achieved using the `cv2.resize()` function from the OpenCV library.
+  * **`learning_rate`**: Log-uniform distribution from `1e-5` to `1e-3`.
+  * **`lstm_units`**: Integer from `64` to `256`.
+  * **`dropout_rate`**: Uniform distribution from `0.2` to `0.5`.
 
-### 3.3. Feature Vector for LSTM Model (274 Dimensions)
-* **Selection**: For the baseline model, a 274-dimensional feature vector was engineered from the 2D keypoint data for each frame.
-* **Rationale**: This process converts the structured JSON output from pose estimation into a flat numerical vector that can be directly fed into an LSTM, focusing solely on geometric positions.
-* **Calculation**: The vector was created by concatenating the flattened (X, Y) coordinates from four keypoint sources: Pose (50 features), Face (140), Left Hand (42), and Right Hand (42).
+\<hr\>
 
-## 4. Dataset and Environment
+## 3\. Data Processing & Feature Engineering
 
-* **Dataset**: How2Sign. The models were trained on the official training split and evaluated on the validation and test splits.
-* **Hardware**: All models were trained on an **NVIDIA A100** GPU.
-* **Software**: The project was developed in a Google Colab environment using `TensorFlow`, `Keras`, `Optuna`, `Pandas`, and `Scikit-learn`.
+Several key preprocessing decisions were made to ensure model compatibility and computational efficiency.
 
-## 5. Project File Structure
+  * **Sequence Standardization**: All video clips were standardized to a fixed length of **30 frames**. Shorter videos were padded with zero-vectors, and longer videos were truncated. This is a requirement for batch processing in RNNs.
+  * **Frame Resolution**: All video frames were downsampled to **64x64 pixels** using OpenCV. This drastically reduces the computational load while retaining essential visual features.
+  * **Keypoint Feature Vector**: For the baseline model, a **274-dimensional** feature vector was engineered for each frame by concatenating the (X, Y) coordinates from pose, face, and hand keypoints, discarding confidence scores.
+  * **CNN Feature Extraction (Transfer Learning)**: For the advanced models, the pre-trained MobileNetV2 (without its top layer) was used as a frozen feature extractor. This leverages existing knowledge of visual patterns, significantly accelerating training and improving performance.
 
-The project is organized into multiple Jupyter Notebooks, each corresponding to a phase of the research. The `0_` prefixed notebooks are primarily for pipeline verification and "smoke tests".
+\<hr\>
 
-* `1_1_Train_LSTM.ipynb`: Contains the implementation and training for the Baseline LSTM model.
-* `2_2_Train_CNN+LSTM.ipynb`: Contains the implementation and training for the manually-tuned CNN-LSTM model.
-* `3_1.ipynb`: Contains the setup and execution of the Optuna hyperparameter search.
-* `3_2_Train_final_optimized_model.ipynb`: Contains the final training and evaluation run using the best hyperparameters discovered by Optuna.
+## 4\. Technical Environment
 
-***
+  * **Dataset**: How2Sign (official train/validation/test splits).
+  * **Hardware**: **NVIDIA A100** GPU.
+  * **Frameworks**: Google Colab, TensorFlow, Keras, Optuna.
+
+\<hr\>
+
+## 5\. Project File Structure
+
+The project is organized into the following key notebooks, which correspond to the experimental phases. The `0_` prefixed files are utility and pipeline verification ("smoke test") scripts.
+
+  * `1_1_Train_Baseline_LSTM.ipynb`: Implements and trains the baseline LSTM model.
+  * `2_2_Train_Manual_CNN_LSTM.ipynb`: Implements and trains the manually-tuned CNN-LSTM model.
+  * `3_1_Optimize_Hyperparameters_Optuna.ipynb`: Executes the Optuna hyperparameter search.
+  * `3_2_Train_Final_Optimized_Model.ipynb`: Trains and evaluates the final model using the best-found hyperparameters.
